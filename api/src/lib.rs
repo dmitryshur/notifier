@@ -1,0 +1,131 @@
+use actix_web::{self, body::Body, dev, error, http::StatusCode, web, HttpResponse};
+use log::warn;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::fmt;
+use std::ops::RangeInclusive;
+
+const MIN_INTERVAL: u64 = 5;
+const MAX_INTERVAL: u64 = 604_800; // Week in seconds
+const INTERVAL_RANGE: RangeInclusive<u64> = MIN_INTERVAL..=MAX_INTERVAL;
+
+const INVALID_INTERVAL: &str = "Interval must be in range 5-604,800 (week in seconds) and a multiple of 5";
+const INVALID_URL: &str = "URL must not be empty and should be valid";
+const INVALID_SCRIPT: &str = "Script can't be empty";
+
+#[derive(Debug)]
+pub enum ApiErrors {
+    Server,
+    Validation(Vec<&'static str>),
+}
+
+impl std::error::Error for ApiErrors {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Server => None,
+            Self::Validation(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for ApiErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Server => write!(f, "Internal server error"),
+            Self::Validation(errors) => {
+                let err = errors.join("\n");
+                f.write_str(&err)
+            }
+        }
+    }
+}
+
+impl error::ResponseError for ApiErrors {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Server => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse<Body> {
+        let res;
+
+        match self {
+            Self::Server => {
+                res = CreateResponse {
+                    id: None,
+                    error: Some(String::from("Internal server error. try again.")),
+                }
+            }
+            Self::Validation(errors) => {
+                res = CreateResponse {
+                    id: None,
+                    error: Some(errors.join(". ")),
+                }
+            }
+        }
+
+        dev::HttpResponseBuilder::new(self.status_code()).json(res)
+    }
+}
+
+pub trait Validate {
+    type Error: std::error::Error + Into<ApiErrors>;
+
+    fn validate(&self) -> Result<(), Self::Error>;
+}
+
+#[derive(Deserialize)]
+pub struct CreateRequest {
+    url: String,
+    interval: u64,
+    script: String,
+}
+
+impl Validate for CreateRequest {
+    type Error = ApiErrors;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        let mut errors = Vec::new();
+
+        // Validation URL is problematic. if the URL is invalid, so be it. the scraper will simply
+        // fail
+        if self.url.is_empty() {
+            errors.push(INVALID_URL)
+        }
+
+        if self.interval % 5 != 0 || !INTERVAL_RANGE.contains(&self.interval) {
+            errors.push(INVALID_INTERVAL)
+        }
+
+        if self.script.is_empty() {
+            errors.push(INVALID_SCRIPT)
+        }
+
+        if !errors.is_empty() {
+            return Err(ApiErrors::Validation(errors));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct CreateResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+// TODO add tests
+pub async fn create_handler(body: web::Json<CreateRequest>) -> Result<HttpResponse, ApiErrors> {
+    let body = body.into_inner();
+    body.validate()?;
+
+    Ok(HttpResponse::Ok().json(CreateResponse {
+        id: Some(String::from("10")),
+        error: None,
+    }))
+}

@@ -1,3 +1,6 @@
+export API_PORT := "4000"
+export RUST_LOG := "INFO"
+
 run-all:
   ./run.sh
 
@@ -8,4 +11,5 @@ test:
   cargo test
 
 check:
-  cargo check
+  cargo clippy
+
