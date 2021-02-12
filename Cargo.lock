@@ -335,7 +335,9 @@ dependencies = [
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "actix-web",
+ "async-trait",
  "broker",
  "bytes 1.0.1",
  "log",

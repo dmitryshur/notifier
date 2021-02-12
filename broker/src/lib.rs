@@ -67,12 +67,13 @@ impl fmt::Display for Exchanges {
 // scrape (scheduler -> scraper)
 // notify (scraper -> bot)
 // delete (bot -> scheduler)
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub enum Messages {
     Create {
         id: String,
         url: String,
-        script: String
+        script: String,
+        interval: u64,
     },
     Delete,
     BotStart,
@@ -80,13 +81,13 @@ pub enum Messages {
     Notify,
 }
 
-pub struct Consumer {}
+pub struct Consumer(LapinConsumer);
 
 #[async_trait]
 pub trait Broker {
     async fn publish(&self, exchange: Exchanges, message: Messages) -> Result<(), BrokerErrors>;
     // TODO replace LapinConsumer with Consumer
-    async fn subscribe(&self, exchange: Exchanges) -> Result<LapinConsumer, BrokerErrors>;
+    async fn subscribe(&self, exchange: Exchanges) -> Result<Consumer, BrokerErrors>;
 }
 
 pub struct Rabbit {
@@ -157,7 +158,7 @@ impl Broker for Rabbit {
         Ok(())
     }
 
-    async fn subscribe(&self, exchange: Exchanges) -> Result<LapinConsumer, BrokerErrors> {
+    async fn subscribe(&self, exchange: Exchanges) -> Result<Consumer, BrokerErrors> {
         let exchange_name = &exchange.to_string();
         self.declare_exchange(exchange_name).await?;
 
@@ -188,6 +189,6 @@ impl Broker for Rabbit {
             )
             .await?;
 
-        Ok(consumer)
+        Ok(Consumer(consumer))
     }
 }

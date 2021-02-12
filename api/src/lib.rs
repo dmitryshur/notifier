@@ -12,9 +12,9 @@ const MIN_INTERVAL: u64 = 5;
 const MAX_INTERVAL: u64 = 604_800; // Week in seconds
 const INTERVAL_RANGE: RangeInclusive<u64> = MIN_INTERVAL..=MAX_INTERVAL;
 
-const INVALID_INTERVAL: &str = "Interval must be in range 5-604,800 (week in seconds) and a multiple of 5";
-const INVALID_URL: &str = "URL must not be empty and should be valid";
-const INVALID_SCRIPT: &str = "Script can't be empty";
+pub const INVALID_INTERVAL: &str = "Interval must be in range 5-604,800 (week in seconds) and a multiple of 5";
+pub const INVALID_URL: &str = "URL must not be empty and should be valid";
+pub const INVALID_SCRIPT: &str = "Script can't be empty";
 
 #[derive(Debug)]
 pub enum ApiErrors {
@@ -136,7 +136,6 @@ where
     pub broker: Arc<Mutex<T>>,
 }
 
-// TODO add tests
 pub async fn create_handler<T>(
     body: web::Json<CreateRequest>,
     state: web::Data<AppState<T>>,
@@ -152,6 +151,7 @@ where
         id: id.to_string(),
         url: body.url,
         script: body.script,
+        interval: body.interval,
     };
     state.broker.lock().publish(Exchanges::Scheduler, msg).await?;
 
