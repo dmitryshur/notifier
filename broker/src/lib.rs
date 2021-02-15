@@ -1,18 +1,19 @@
+use async_stream::stream;
 use async_trait::async_trait;
+use lapin::options::BasicAckOptions;
 use lapin::{
     self,
     options::{
         BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions,
     },
     types::FieldTable,
-    BasicProperties, Channel, Connection, ConnectionProperties, Consumer as LapinConsumer, Error as LapinError,
-    ExchangeKind,
+    BasicProperties, Channel, Connection, ConnectionProperties, Error as LapinError, ExchangeKind,
 };
-use log::warn;
-use serde::Serialize;
-use std::error::Error;
-use std::{fmt, time::Duration};
+use log::{error, warn};
+use serde::{Deserialize, Serialize};
+use std::{error::Error, fmt, pin::Pin, time::Duration};
 use tokio_amqp::*;
+use tokio_stream::Stream;
 
 #[derive(Debug)]
 pub enum BrokerErrors {
@@ -61,13 +62,7 @@ impl fmt::Display for Exchanges {
     }
 }
 
-// msg types:
-// create (api -> scheduler)
-// bot_start (bot -> scheduler)
-// scrape (scheduler -> scraper)
-// notify (scraper -> bot)
-// delete (bot -> scheduler)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Messages {
     Create {
         id: String,
@@ -81,12 +76,19 @@ pub enum Messages {
     Notify,
 }
 
-pub struct Consumer(LapinConsumer);
+pub struct Consumer {
+    inner: Pin<Box<dyn Stream<Item = Messages> + Send>>,
+}
+
+impl Consumer {
+    pub fn into_inner(self) -> Pin<Box<dyn Stream<Item = Messages> + Send>> {
+        self.inner
+    }
+}
 
 #[async_trait]
 pub trait Broker {
     async fn publish(&self, exchange: Exchanges, message: Messages) -> Result<(), BrokerErrors>;
-    // TODO replace LapinConsumer with Consumer
     async fn subscribe(&self, exchange: Exchanges) -> Result<Consumer, BrokerErrors>;
 }
 
@@ -95,7 +97,6 @@ pub struct Rabbit {
     channel: Channel,
 }
 
-// TODO maybe try to pass runtime as arg?
 impl Rabbit {
     pub async fn new(addr: &str) -> Result<Self, BrokerErrors> {
         let mut interval = Duration::from_secs(1);
@@ -189,6 +190,29 @@ impl Broker for Rabbit {
             )
             .await?;
 
-        Ok(Consumer(consumer))
+        let stream = stream! {
+            for msg in consumer {
+                if let Ok((channel, msg)) = msg {
+                    let message = serde_json::from_slice::<Messages>(&msg.data);
+
+                    match message {
+                        Ok(message) => {
+                            yield message;
+                        }
+                        Err(error) => {
+                            error!("Invalid message format in scheduler consumer. {}", error);
+                        }
+                    }
+
+                    if let Err(error) = channel.basic_ack(msg.delivery_tag, BasicAckOptions::default()).await {
+                        error!("Error in basic_ack. {}", error);
+                    }
+                }
+            }
+        };
+
+        Ok(Consumer {
+            inner: Box::pin(stream),
+        })
     }
 }

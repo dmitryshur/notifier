@@ -1,6 +1,5 @@
 use actix_web::{self, body::Body, dev, error, http::StatusCode, web, HttpResponse};
 use broker::{Broker, BrokerErrors, Exchanges, Messages};
-use log::warn;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -49,7 +48,6 @@ impl From<BrokerErrors> for ApiErrors {
     }
 }
 
-// TODO logs are needed
 impl error::ResponseError for ApiErrors {
     fn status_code(&self) -> StatusCode {
         match self {
