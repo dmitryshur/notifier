@@ -2,6 +2,7 @@ use broker::{Broker, Exchanges, Rabbit};
 use log::{error, info};
 use std::env;
 use tokio_stream::StreamExt;
+use scheduler::{store::{FileStore}, Scheduler};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -26,9 +27,14 @@ async fn main() -> std::io::Result<()> {
     };
     let mut consumer = consumer.into_inner();
 
+    let file_store = FileStore::new("data.csv").expect("error 2");
+    let scheduler = Scheduler::new(broker, file_store);
+
     info!("Listening for messages in scheduler");
     while let Some(value) = consumer.next().await {
-        println!("value: {:?}", value);
+        if let Err(error) = scheduler.receive(&value).await {
+           error!("Error in receiving message in scheduler. message: {:?}. error: {}", value, error);
+        }
     }
 
     Ok(())

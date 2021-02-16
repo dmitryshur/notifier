@@ -62,6 +62,11 @@ impl fmt::Display for Exchanges {
     }
 }
 
+// create (api -> scheduler)
+// delete (bot -> scheduler)
+// botStart (bot -> scheduler)
+// scrape (scheduler -> scraper)
+// notify (scheduler -> bot)
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Messages {
     Create {
@@ -159,6 +164,7 @@ impl Broker for Rabbit {
         Ok(())
     }
 
+    // TODO how stream! works?
     async fn subscribe(&self, exchange: Exchanges) -> Result<Consumer, BrokerErrors> {
         let exchange_name = &exchange.to_string();
         self.declare_exchange(exchange_name).await?;
