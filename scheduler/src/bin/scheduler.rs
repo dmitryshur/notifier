@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let scheduler = match Scheduler::new(broker, file_store) {
+    let scheduler = match Scheduler::new(broker, file_store).await {
         Ok(scheduler) => scheduler,
         Err(error) => {
             error!("Can't create scheduler. {}", error);

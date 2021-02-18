@@ -13,6 +13,7 @@ const INTERVAL_SECONDS: u64 = 1;
 pub enum SchedulerErrors {
     IO(std::io::Error),
     CSV(csv::Error),
+    Runtime(tokio::task::JoinError),
 }
 
 impl From<std::io::Error> for SchedulerErrors {
@@ -27,11 +28,18 @@ impl From<csv::Error> for SchedulerErrors {
     }
 }
 
+impl From<tokio::task::JoinError> for SchedulerErrors {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self::Runtime(error)
+    }
+}
+
 impl fmt::Display for SchedulerErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IO(error) => write!(f, "IO error. {}", error),
             Self::CSV(error) => write!(f, "CSV error. {}", error),
+            Self::Runtime(error) => write!(f, "Runtime error. {}", error),
         }
     }
 }
@@ -41,6 +49,7 @@ impl std::error::Error for SchedulerErrors {
         match self {
             Self::IO(error) => Some(error),
             Self::CSV(error) => Some(error),
+            Self::Runtime(error) => Some(error),
         }
     }
 }
@@ -68,13 +77,11 @@ where
     T: Broker,
     U: Store + Sync + Send + 'static,
 {
-    pub fn new(broker: T, store: U) -> Result<Self, SchedulerErrors> {
+    pub async fn new(broker: T, store: U) -> Result<Self, SchedulerErrors> {
         let (sender, mut receiver) = mpsc::channel(1024);
         let store = Arc::new(store);
-
-        // FIXME this blocks
-        let store_data = store.load()?;
-        println!("{:?}", store_data);
+        let store_clone = Arc::clone(&store);
+        let store_data = tokio::task::spawn_blocking(move || store_clone.load()).await??;
 
         let mut intervals = HashMap::new();
         for record in store_data {
@@ -101,7 +108,7 @@ where
                                 url,
                             };
 
-                            // FIXME this blocks
+                            // This blocks, but the blocking time is neglectable
                             if let Err(error) = store_clone.add(record) {
                                 error!("Error while adding a new entry to store. {}", error);
                                 continue;
