@@ -1,67 +1,116 @@
 pub mod store;
 
+use crate::store::Record;
 use broker::{Broker, Messages};
 use log::{error, info};
-use parking_lot::Mutex;
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 use store::Store;
-use tokio::sync::{
-    mpsc::{self, Sender},
-    oneshot,
-};
+use tokio::sync::mpsc::{self, Sender};
 
 const INTERVAL_SECONDS: u64 = 1;
 
 #[derive(Debug)]
-pub enum SchedulerErrors {}
+pub enum SchedulerErrors {
+    IO(std::io::Error),
+    CSV(csv::Error),
+}
+
+impl From<std::io::Error> for SchedulerErrors {
+    fn from(error: std::io::Error) -> Self {
+        Self::IO(error)
+    }
+}
+
+impl From<csv::Error> for SchedulerErrors {
+    fn from(error: csv::Error) -> Self {
+        Self::CSV(error)
+    }
+}
 
 impl fmt::Display for SchedulerErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Scheduler error")
+        match self {
+            Self::IO(error) => write!(f, "IO error. {}", error),
+            Self::CSV(error) => write!(f, "CSV error. {}", error),
+        }
     }
 }
 
 impl std::error::Error for SchedulerErrors {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
+        match self {
+            Self::IO(error) => Some(error),
+            Self::CSV(error) => Some(error),
+        }
     }
 }
 
+pub struct Intervals(HashMap<String, (Duration, u64)>);
+
 #[derive(Debug)]
 enum Command {
-    Add { id: String, duration: (Duration, u64) },
+    Add(Messages),
     Tick,
 }
 
 pub struct Scheduler<T, U>
 where
     T: Broker,
-    U: Store,
+    U: Store + Sync + Send + 'static,
 {
     broker: T,
-    store: U,
+    store: Arc<U>,
     sender: Sender<Command>,
 }
 
-// TODO create intervals and the ability to add new intervals
-// TODO launch task in background
-// TODO on scheduler start, should load previous intervals from file (use csv)
 impl<T, U> Scheduler<T, U>
 where
     T: Broker,
-    U: Store,
+    U: Store + Sync + Send + 'static,
 {
-    pub fn new(broker: T, store: U) -> Self {
+    pub fn new(broker: T, store: U) -> Result<Self, SchedulerErrors> {
         let (sender, mut receiver) = mpsc::channel(1024);
+        let store = Arc::new(store);
 
-        // TODO use store to load intervals here
-        let mut intervals = Box::new(HashMap::new());
+        // FIXME this blocks
+        let store_data = store.load()?;
+        println!("{:?}", store_data);
+
+        let mut intervals = HashMap::new();
+        for record in store_data {
+            intervals.insert(record.id, (Duration::from_secs(record.interval), record.interval));
+        }
+
+        let mut intervals = Box::new(intervals);
+        let store_clone = Arc::clone(&store);
         tokio::spawn(async move {
             while let Some(cmd) = receiver.recv().await {
                 match cmd {
-                    Command::Add { id, duration } => {
-                        if let Some(value) = intervals.insert(id.clone(), (duration)) {
-                            error!("Duplicate key found. key: {}. value: ({:?}, {})", id, value.0, value.1)
+                    Command::Add(msg) => {
+                        if let Messages::Create {
+                            id,
+                            interval,
+                            script,
+                            url,
+                        } = msg
+                        {
+                            let record = Record {
+                                id: id.clone(),
+                                interval,
+                                script,
+                                url,
+                            };
+
+                            // FIXME this blocks
+                            if let Err(error) = store_clone.add(record) {
+                                error!("Error while adding a new entry to store. {}", error);
+                                continue;
+                            }
+
+                            if let Some(value) = intervals.insert(id.clone(), (Duration::from_secs(interval), interval))
+                            {
+                                error!("Duplicate key found. key: {}. value: ({:?}, {})", id, value.0, value.1)
+                            }
                         }
                     }
                     Command::Tick => {
@@ -83,26 +132,19 @@ where
         let scheduler = Scheduler { broker, store, sender };
         scheduler.launch_interval();
 
-        scheduler
+        Ok(scheduler)
     }
 
     // TODO receive Messages. create - add interval. delete - remove interval
-    pub async fn receive(&self, message: &Messages) -> Result<(), SchedulerErrors> {
+    pub async fn receive(&self, message: Messages) -> Result<(), SchedulerErrors> {
         match message {
-            Messages::Create {
-                id,
-                interval,
-                script,
-                url,
-            } => {
-                let command = Command::Add {
-                    id: id.into(),
-                    duration: (Duration::from_secs(*interval), *interval),
-                };
+            Messages::Create { .. } => {
+                let command = Command::Add(message);
                 let mut sender = self.sender.clone();
 
-                // TODO handle error
-                sender.send(command).await.unwrap();
+                if let Err(error) = sender.send(command).await {
+                    error!("Error while sending a Create message to sender channel. {}", error);
+                }
             }
             _ => {}
         }
@@ -122,8 +164,9 @@ where
 
                 let command = Command::Tick;
 
-                // TODO handle error
-                sender.send(command).await.expect("error 1");
+                if let Err(error) = sender.send(command).await {
+                    error!("Error while sending a Tick message to sender channel. {}", error);
+                }
             }
         });
     }

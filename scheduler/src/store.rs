@@ -1,38 +1,66 @@
 use crate::SchedulerErrors;
-use std::{fs::File, path::Path};
+use csv::{Reader, WriterBuilder};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::{File, OpenOptions},
+    path::Path,
+};
 
-// TODO some data needs to be passed
-pub trait Store {
-    type Format;
-
-    fn load(&self) -> Result<Self::Format, SchedulerErrors>;
-    fn add(&self) -> Result<(), SchedulerErrors>;
-    fn remove(&self) -> Result<(), SchedulerErrors>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Record {
+    pub id: String,
+    pub interval: u64,
+    pub script: String,
+    pub url: String,
 }
 
-pub struct FileStore {}
+pub trait Store {
+    fn load(&self) -> Result<Vec<Record>, SchedulerErrors>;
+    fn add(&self, record: Record) -> Result<(), SchedulerErrors>;
+    fn remove(&self, id: &str) -> Result<(), SchedulerErrors>;
+}
 
+pub struct FileStore {
+    file: File,
+}
+
+// TODO implement remove
 impl FileStore {
     pub fn new<P>(path: P) -> Result<Self, SchedulerErrors>
     where
         P: AsRef<Path>,
     {
-        Ok(Self {})
+        let file = OpenOptions::new().read(true).append(true).create(true).open(path)?;
+
+        Ok(Self { file })
     }
 }
 
 impl Store for FileStore {
-    type Format = String;
+    fn load(&self) -> Result<Vec<Record>, SchedulerErrors> {
+        let mut reader = Reader::from_reader(&self.file);
 
-    fn load(&self) -> Result<Self::Format, SchedulerErrors> {
-        todo!()
+        let mut results = Vec::new();
+        for result in reader.deserialize() {
+            let record: Record = result?;
+            results.push(record);
+        }
+
+        Ok(results)
     }
 
-    fn add(&self) -> Result<(), SchedulerErrors> {
-        todo!()
+    fn add(&self, record: Record) -> Result<(), SchedulerErrors> {
+        // CSV headers are needed only on initial write
+        let file_size = self.file.metadata()?.len();
+        let mut writer = WriterBuilder::new().has_headers(file_size == 0).from_writer(&self.file);
+
+        writer.serialize(record)?;
+        writer.flush()?;
+
+        Ok(())
     }
 
-    fn remove(&self) -> Result<(), SchedulerErrors> {
+    fn remove(&self, id: &str) -> Result<(), SchedulerErrors> {
         todo!()
     }
 }
