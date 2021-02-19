@@ -64,7 +64,7 @@ impl fmt::Display for Exchanges {
 
 // create (api -> scheduler)
 // delete (bot -> scheduler)
-// botStart (bot -> scheduler)
+// activate (bot -> scheduler)
 // scrape (scheduler -> scraper)
 // notify (scheduler -> bot)
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,8 +76,14 @@ pub enum Messages {
         interval: u64,
     },
     Delete,
-    BotStart,
-    Scrape,
+    Activate {
+        id: String,
+    },
+    Scrape {
+        id: String,
+        url: String,
+        script: String,
+    },
     Notify,
 }
 

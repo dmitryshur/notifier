@@ -12,10 +12,12 @@ pub struct Record {
     pub interval: u64,
     pub script: String,
     pub url: String,
+    pub is_active: bool,
 }
 
 pub trait Store {
     fn load(&self) -> Result<Vec<Record>, SchedulerErrors>;
+    fn get(&self, id: &str) -> Result<Option<Record>, SchedulerErrors>;
     fn add(&self, record: Record) -> Result<(), SchedulerErrors>;
     fn remove(&self, id: &str) -> Result<(), SchedulerErrors>;
 }
@@ -47,6 +49,20 @@ impl Store for FileStore {
         }
 
         Ok(results)
+    }
+
+    fn get(&self, id: &str) -> Result<Option<Record>, SchedulerErrors> {
+        let mut reader = Reader::from_reader(&self.file);
+
+        for result in reader.deserialize() {
+            let record: Record = result?;
+
+            if record.id == id {
+                return Ok(Some(record));
+            }
+        }
+
+        Ok(None)
     }
 
     fn add(&self, record: Record) -> Result<(), SchedulerErrors> {

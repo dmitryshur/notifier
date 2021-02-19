@@ -14,3 +14,6 @@ test:
 check:
   cargo clippy
 
+scraper:
+  yarn --cwd scraper/ start
+

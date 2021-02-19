@@ -1,7 +1,7 @@
 pub mod store;
 
 use crate::store::Record;
-use broker::{Broker, Messages};
+use broker::{Broker, Exchanges, Messages};
 use log::{error, info};
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 use store::Store;
@@ -59,6 +59,7 @@ pub struct Intervals(HashMap<String, (Duration, u64)>);
 #[derive(Debug)]
 enum Command {
     Add(Messages),
+    Activate { id: String },
     Tick,
 }
 
@@ -67,7 +68,7 @@ where
     T: Broker,
     U: Store + Sync + Send + 'static,
 {
-    broker: T,
+    broker: Arc<T>,
     store: Arc<U>,
     sender: Sender<Command>,
 }
@@ -80,16 +81,20 @@ where
     pub async fn new(broker: T, store: U) -> Result<Self, SchedulerErrors> {
         let (sender, mut receiver) = mpsc::channel(1024);
         let store = Arc::new(store);
+        let broker = Arc::new(broker);
         let store_clone = Arc::clone(&store);
         let store_data = tokio::task::spawn_blocking(move || store_clone.load()).await??;
+        println!("Records: {:?}", store_data);
 
         let mut intervals = HashMap::new();
         for record in store_data {
-            intervals.insert(record.id, (Duration::from_secs(record.interval), record.interval));
+            if record.is_active {
+                intervals.insert(record.id, (Duration::from_secs(record.interval), record.interval));
+            }
         }
-
         let mut intervals = Box::new(intervals);
         let store_clone = Arc::clone(&store);
+
         tokio::spawn(async move {
             while let Some(cmd) = receiver.recv().await {
                 match cmd {
@@ -106,6 +111,7 @@ where
                                 interval,
                                 script,
                                 url,
+                                is_active: false,
                             };
 
                             // This blocks, but the blocking time is neglectable
@@ -113,27 +119,16 @@ where
                                 error!("Error while adding a new entry to store. {}", error);
                                 continue;
                             }
-
-                            if let Some(value) = intervals.insert(id.clone(), (Duration::from_secs(interval), interval))
-                            {
-                                error!("Duplicate key found. key: {}. value: ({:?}, {})", id, value.0, value.1)
-                            }
                         }
                     }
+                    Command::Activate { id } => {}
                     Command::Tick => {
-                        for (_id, (duration, current_duration)) in intervals.iter_mut() {
-                            if *current_duration == 0 {
-                                *current_duration = duration.as_secs();
-                                info!("Interval reached zero");
-                                continue;
-                            }
-
-                            info!("Duration: {}", *current_duration);
-                            *current_duration -= INTERVAL_SECONDS;
-                        }
+                        // TODO
                     }
                 }
             }
+
+            Ok::<(), SchedulerErrors>(())
         });
 
         let scheduler = Scheduler { broker, store, sender };
@@ -153,6 +148,7 @@ where
                     error!("Error while sending a Create message to sender channel. {}", error);
                 }
             }
+            Messages::Activate { id } => {}
             _ => {}
         }
 
