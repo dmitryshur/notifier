@@ -3,5 +3,6 @@
 members = [
   "api",
   "scheduler",
-  "broker"
+  "broker",
+  "bot"
 ]

@@ -66,7 +66,7 @@ impl fmt::Display for Exchanges {
 // delete (bot -> scheduler)
 // activate (bot -> scheduler)
 // scrape (scheduler -> scraper)
-// notify (scheduler -> bot)
+// notify (scraper -> bot)
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Messages {
     Create {
@@ -78,6 +78,7 @@ pub enum Messages {
     Delete,
     Activate {
         id: String,
+        chat_id: u64
     },
     Scrape {
         id: String,

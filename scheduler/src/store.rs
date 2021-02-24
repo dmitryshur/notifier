@@ -12,7 +12,7 @@ pub struct Record {
     pub interval: u64,
     pub script: String,
     pub url: String,
-    pub is_active: bool,
+    pub chat_id: Option<u64>,
 }
 
 pub trait Store {

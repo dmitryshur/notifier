@@ -59,7 +59,7 @@ pub struct Intervals(HashMap<String, (Duration, u64)>);
 #[derive(Debug)]
 enum Command {
     Add(Messages),
-    Activate { id: String },
+    Activate { id: String, chat_id: u64 },
     Tick,
 }
 
@@ -88,7 +88,7 @@ where
 
         let mut intervals = HashMap::new();
         for record in store_data {
-            if record.is_active {
+            if record.chat_id.is_some() {
                 intervals.insert(record.id, (Duration::from_secs(record.interval), record.interval));
             }
         }
@@ -111,7 +111,7 @@ where
                                 interval,
                                 script,
                                 url,
-                                is_active: false,
+                                chat_id: None,
                             };
 
                             // This blocks, but the blocking time is neglectable
@@ -121,7 +121,7 @@ where
                             }
                         }
                     }
-                    Command::Activate { id } => {}
+                    Command::Activate { id, chat_id } => {}
                     Command::Tick => {
                         // TODO
                     }
@@ -148,7 +148,7 @@ where
                     error!("Error while sending a Create message to sender channel. {}", error);
                 }
             }
-            Messages::Activate { id } => {}
+            Messages::Activate { id, chat_id } => {}
             _ => {}
         }
 
