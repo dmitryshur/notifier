@@ -1,13 +1,34 @@
 use broker::{Broker, Exchanges, Messages};
 use log::{error, info};
-use std::fmt;
+use std::{error, fmt};
 use telegram_bot::*;
 use tokio::stream::StreamExt;
 
-enum BotErrors {}
+#[derive(Debug)]
+enum BotErrors {
+    Start,
+    Help,
+    List,
+}
+
+impl fmt::Display for BotErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Start => write!(f, "Server error while handling the start command"),
+            Self::Help => write!(f, "Server error while handling the help command"),
+            Self::List => write!(f, "Server error while handling the list command"),
+        }
+    }
+}
+
+impl error::Error for BotErrors {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
+    }
+}
 
 enum BotResponse {
-    Start,
+    Start { id: Option<String> },
     Help,
     List { ids: Vec<String> },
 }
@@ -15,11 +36,24 @@ enum BotResponse {
 impl fmt::Display for BotResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Start => {
-                write!(f, "Subscribed to notification successfully")
+            Self::Start { id } => {
+                if id.is_some() {
+                    write!(
+                        f,
+                        "Subscribed to notifications for script id = {} successfully",
+                        id.as_ref().unwrap()
+                    )
+                } else {
+                    write!(f, "Could not subscribe. check if the ID of the script was passed")
+                }
             }
             Self::Help => {
-                write!(f, "Possible commands:")
+                let string = vec![
+                    "/start <id> - Subscribe to notifications of a script.",
+                    "/list - Show a list of the currently active subscriptions.",
+                ]
+                .join("\n");
+                f.write_str(&string)
             }
             Self::List { ids } => {
                 write!(f, "The list of ids is: {:?}", ids)
@@ -71,8 +105,6 @@ where
                 }
             };
 
-            // TODO on help, format string of available commands
-            // TODO on start, check if id present. if not, return err message. else, get id and send to broker
             // TODO implement list
             // TODO maybe handle edit command as well
             if let UpdateKind::Message(message) = &update.kind {
@@ -80,22 +112,58 @@ where
                     let strings: Vec<&str> = data.split(' ').collect();
 
                     let response = match *strings.first().unwrap() {
-                        "/start" => BotResponse::Start,
-                        "/help" => BotResponse::Help,
-                        "/list" => BotResponse::List {
-                            ids: vec![String::from("123")],
-                        },
+                        "/start" => self.handle_start(&strings[1..], message.from.id).await,
+                        "/help" => self.handle_help().await,
+                        "/list" => self.handle_list().await,
                         _ => {
                             info!("Invalid message received from bot. {:?}", data);
                             continue;
                         }
                     };
 
-                    if let Err(error) = self.api.send(message.text_reply(response.to_string())).await {
-                        error!("Error in sending message. {}", error);
+                    let chat = ChatId::from(message.from.id);
+
+                    match response {
+                        Ok(response) => {
+                            self.api.spawn(chat.text(response.to_string()));
+                        }
+                        Err(error) => {
+                            self.api.spawn(chat.text(error.to_string()));
+                        }
                     }
                 }
             }
         }
+    }
+
+    async fn handle_start(&self, input: &[&str], user_id: UserId) -> Result<BotResponse, BotErrors> {
+        match input.get(0) {
+            Some(id) => {
+                let broker_msg = Messages::Activate {
+                    id: id.to_string(),
+                    chat_id: user_id.to_string(),
+                };
+
+                if let Err(error) = self.broker.publish(Exchanges::Scheduler, broker_msg).await {
+                    error!("bot.handle_start. {}", error);
+                    return Err(BotErrors::Start);
+                }
+
+                return Ok(BotResponse::Start {
+                    id: Some(id.to_string()),
+                });
+            }
+            None => Ok(BotResponse::Start { id: None }),
+        }
+    }
+
+    async fn handle_help(&self) -> Result<BotResponse, BotErrors> {
+        Ok(BotResponse::Help)
+    }
+
+    async fn handle_list(&self) -> Result<BotResponse, BotErrors> {
+        Ok(BotResponse::List {
+            ids: vec![String::from("123")],
+        })
     }
 }

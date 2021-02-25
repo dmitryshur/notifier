@@ -78,7 +78,7 @@ pub enum Messages {
     Delete,
     Activate {
         id: String,
-        chat_id: u64
+        chat_id: String,
     },
     Scrape {
         id: String,

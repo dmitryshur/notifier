@@ -148,7 +148,9 @@ where
                     error!("Error while sending a Create message to sender channel. {}", error);
                 }
             }
-            Messages::Activate { id, chat_id } => {}
+            Messages::Activate { id, chat_id } => {
+                info!("received msg. id: {}. chat_id: {}", id, chat_id);
+            }
             _ => {}
         }
 
