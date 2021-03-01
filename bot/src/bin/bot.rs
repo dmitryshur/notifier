@@ -3,9 +3,6 @@ use broker::{Broker, Exchanges, Rabbit};
 use log::error;
 use std::{env, process};
 
-const BOT_NAME: &'static str = "TestingBot42_bot";
-
-// TODO refactor to use other lib
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();

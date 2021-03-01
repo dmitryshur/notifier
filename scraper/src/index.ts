@@ -9,7 +9,6 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console(), new winston.transports.File({ filename: 'logs.log' })],
 });
 
-// TODO get env vars
 (async function main() {
   const rabbitAddress = process.env.RABBIT_ADDRESS;
   if (!rabbitAddress) {

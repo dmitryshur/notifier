@@ -59,7 +59,7 @@ pub struct Intervals(HashMap<String, (Duration, u64)>);
 #[derive(Debug)]
 enum Command {
     Add(Messages),
-    Activate { id: String, chat_id: u64 },
+    Activate { id: String, chat_id: String },
     Tick,
 }
 
@@ -83,18 +83,18 @@ where
         let store = Arc::new(store);
         let broker = Arc::new(broker);
         let store_clone = Arc::clone(&store);
-        let store_data = tokio::task::spawn_blocking(move || store_clone.load()).await??;
-        println!("Records: {:?}", store_data);
+        let mut store_data = tokio::task::spawn_blocking(move || store_clone.load()).await??;
 
         let mut intervals = HashMap::new();
-        for record in store_data {
+        for (id, record) in store_data.drain() {
             if record.chat_id.is_some() {
-                intervals.insert(record.id, (Duration::from_secs(record.interval), record.interval));
+                intervals.insert(id, (Duration::from_secs(record.interval), record.interval));
             }
         }
         let mut intervals = Box::new(intervals);
         let store_clone = Arc::clone(&store);
 
+        // TODO move to a separate method
         tokio::spawn(async move {
             while let Some(cmd) = receiver.recv().await {
                 match cmd {
@@ -112,18 +112,60 @@ where
                                 script,
                                 url,
                                 chat_id: None,
+                                is_deleted: false,
                             };
 
-                            // This blocks, but the blocking time is neglectable
+                            // Blocks
                             if let Err(error) = store_clone.add(record) {
                                 error!("Error while adding a new entry to store. {}", error);
                                 continue;
                             }
                         }
                     }
-                    Command::Activate { id, chat_id } => {}
+                    Command::Activate { id, chat_id } => {
+                        // Blocks
+                        let record = match store_clone.get(&id) {
+                            Ok(record) => match record {
+                                Some(record) => record,
+                                None => {
+                                    error!("scheduler.new.Activate.get.record");
+                                    continue;
+                                }
+                            },
+                            Err(error) => {
+                                error!("scheduler.new.Activate.get. {}", error);
+                                continue;
+                            }
+                        };
+
+                        let updated_record = Record {
+                            chat_id: Some(chat_id),
+                            ..record
+                        };
+
+                        // Blocks
+                        if let Err(error) = store_clone.add(updated_record) {
+                            error!("scheduler.new.Activate.add. {}", error);
+                            continue;
+                        }
+
+                        intervals.insert(id, (Duration::from_secs(record.interval), record.interval));
+                    }
                     Command::Tick => {
-                        // TODO
+                        for (id, (duration, current_duration)) in intervals.iter_mut() {
+                            info!(
+                                "id: {}. duration: {:?}. current_duration: {}",
+                                id, duration, current_duration
+                            );
+
+                            // TODO send msg to scraper
+                            if *current_duration == 0 {
+                                *current_duration = duration.as_secs();
+                                continue;
+                            }
+
+                            *current_duration -= 1;
+                        }
                     }
                 }
             }
@@ -137,19 +179,23 @@ where
         Ok(scheduler)
     }
 
-    // TODO receive Messages. create - add interval. delete - remove interval
     pub async fn receive(&self, message: Messages) -> Result<(), SchedulerErrors> {
+        let mut sender = self.sender.clone();
+
         match message {
             Messages::Create { .. } => {
                 let command = Command::Add(message);
-                let mut sender = self.sender.clone();
 
                 if let Err(error) = sender.send(command).await {
-                    error!("Error while sending a Create message to sender channel. {}", error);
+                    error!("scheduler.receive.Create. {}", error);
                 }
             }
             Messages::Activate { id, chat_id } => {
-                info!("received msg. id: {}. chat_id: {}", id, chat_id);
+                let command = Command::Activate { id, chat_id };
+
+                if let Err(error) = sender.send(command).await {
+                    error!("scheduler.receive.Activate. {}", error);
+                }
             }
             _ => {}
         }
@@ -170,7 +216,7 @@ where
                 let command = Command::Tick;
 
                 if let Err(error) = sender.send(command).await {
-                    error!("Error while sending a Tick message to sender channel. {}", error);
+                    error!("scheduler.launch_interval. {}", error);
                 }
             }
         });
