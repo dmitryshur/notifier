@@ -1,7 +1,8 @@
 use bot::TelegramBot;
 use broker::{Broker, Exchanges, Rabbit};
-use log::error;
+use log::{error, info};
 use std::{env, process};
+use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
@@ -14,10 +15,25 @@ async fn main() {
     let broker = match Rabbit::new(&rabbit_address).await {
         Ok(broker) => broker,
         Err(error) => {
-            error!("Can't connect to rabbit. {}", error);
+            error!("bot.Rabbit. {}", error);
             process::exit(1);
         }
     };
+
+    let consumer = match broker.subscribe(Exchanges::Bot).await {
+        Ok(consumer) => consumer,
+        Err(error) => {
+            error!("bot.subscribe. {}", error);
+            std::process::exit(1);
+        }
+    };
+    let mut consumer = consumer.into_inner();
+
+    tokio::spawn(async move {
+        while let Some(value) = consumer.next().await {
+            info!("the msg is: {:?}", value);
+        }
+    });
 
     let bot = TelegramBot::new(token, broker);
     bot.start().await;

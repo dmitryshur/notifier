@@ -105,7 +105,6 @@ where
                 }
             };
 
-            // TODO implement list
             // TODO maybe handle edit command as well
             if let UpdateKind::Message(message) = &update.kind {
                 if let MessageKind::Text { data, .. } = &message.kind {

@@ -5,7 +5,7 @@ use broker::{Broker, Exchanges, Messages};
 use log::{error, info};
 use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 use store::Store;
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 const INTERVAL_SECONDS: u64 = 1;
 
@@ -54,8 +54,6 @@ impl std::error::Error for SchedulerErrors {
     }
 }
 
-pub struct Intervals(HashMap<String, (Duration, u64)>);
-
 #[derive(Debug)]
 enum Command {
     Add(Messages),
@@ -75,11 +73,11 @@ where
 
 impl<T, U> Scheduler<T, U>
 where
-    T: Broker,
+    T: Broker + Sync + Send + 'static,
     U: Store + Sync + Send + 'static,
 {
     pub async fn new(broker: T, store: U) -> Result<Self, SchedulerErrors> {
-        let (sender, mut receiver) = mpsc::channel(1024);
+        let (sender, receiver) = mpsc::channel(1024);
         let store = Arc::new(store);
         let broker = Arc::new(broker);
         let store_clone = Arc::clone(&store);
@@ -91,10 +89,43 @@ where
                 intervals.insert(id, (Duration::from_secs(record.interval), record.interval));
             }
         }
-        let mut intervals = Box::new(intervals);
-        let store_clone = Arc::clone(&store);
 
-        // TODO move to a separate method
+        let scheduler = Scheduler { broker, store, sender };
+        scheduler.launch_receiver(intervals, receiver);
+        scheduler.launch_interval();
+
+        Ok(scheduler)
+    }
+
+    pub async fn receive(&self, message: Messages) -> Result<(), SchedulerErrors> {
+        let mut sender = self.sender.clone();
+
+        match message {
+            Messages::Create { .. } => {
+                let command = Command::Add(message);
+
+                if let Err(error) = sender.send(command).await {
+                    error!("scheduler.receive.Create. {}", error);
+                }
+            }
+            Messages::Activate { id, chat_id } => {
+                let command = Command::Activate { id, chat_id };
+
+                if let Err(error) = sender.send(command).await {
+                    error!("scheduler.receive.Activate. {}", error);
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn launch_receiver(&self, intervals: HashMap<String, (Duration, u64)>, mut receiver: Receiver<Command>) {
+        let mut intervals = Box::new(intervals);
+        let store_clone = Arc::clone(&self.store);
+        let broker_clone = Arc::clone(&self.broker);
+
         tokio::spawn(async move {
             while let Some(cmd) = receiver.recv().await {
                 match cmd {
@@ -123,6 +154,10 @@ where
                         }
                     }
                     Command::Activate { id, chat_id } => {
+                        if intervals.contains_key(&id) {
+                            continue;
+                        }
+
                         // Blocks
                         let record = match store_clone.get(&id) {
                             Ok(record) => match record {
@@ -158,9 +193,33 @@ where
                                 id, duration, current_duration
                             );
 
-                            // TODO send msg to scraper
                             if *current_duration == 0 {
                                 *current_duration = duration.as_secs();
+
+                                let record = match store_clone.get(&id) {
+                                    Ok(record) => match record {
+                                        Some(record) => record,
+                                        None => {
+                                            error!("scheduler.new.Tick.get.record");
+                                            continue;
+                                        }
+                                    },
+                                    Err(error) => {
+                                        error!("scheduler.new.Tick.get. {}", error);
+                                        continue;
+                                    }
+                                };
+
+                                let msg = Messages::Scrape {
+                                    id: record.id,
+                                    chat_id: record.chat_id,
+                                    script: record.script,
+                                    url: record.url,
+                                };
+                                if let Err(error) = broker_clone.publish(Exchanges::Scraper, msg).await {
+                                    error!("scheduler.new.Tick.publish. {}", error);
+                                }
+
                                 continue;
                             }
 
@@ -172,35 +231,6 @@ where
 
             Ok::<(), SchedulerErrors>(())
         });
-
-        let scheduler = Scheduler { broker, store, sender };
-        scheduler.launch_interval();
-
-        Ok(scheduler)
-    }
-
-    pub async fn receive(&self, message: Messages) -> Result<(), SchedulerErrors> {
-        let mut sender = self.sender.clone();
-
-        match message {
-            Messages::Create { .. } => {
-                let command = Command::Add(message);
-
-                if let Err(error) = sender.send(command).await {
-                    error!("scheduler.receive.Create. {}", error);
-                }
-            }
-            Messages::Activate { id, chat_id } => {
-                let command = Command::Activate { id, chat_id };
-
-                if let Err(error) = sender.send(command).await {
-                    error!("scheduler.receive.Activate. {}", error);
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
     }
 
     fn launch_interval(&self) {

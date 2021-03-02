@@ -1,15 +1,13 @@
 import amqp, { ConsumeMessage } from 'amqplib';
 import type { Channel, Connection } from 'amqplib';
 
-export type Exchanges = 'scheduler' | 'scraper';
+export type Exchanges = 'scraper' | 'bot';
 
 export interface Scrape {
-  Create: {
+  Scrape: {
     id: string;
+    chat_id: string;
     url: string;
-    interval: number;
-    email: string;
-    phone: string;
     script: string;
   };
 }
@@ -17,16 +15,18 @@ export interface Scrape {
 export function isScrape(msg: any): msg is Scrape {
   const obj = JSON.parse(msg);
 
-  if (obj.Create) {
-    return ['id', 'url', 'interval', 'email', 'phone', 'script'].every((prop) => prop in obj.Create);
+  if (obj.Scrape) {
+    return ['id', 'chat_id', 'url', 'script'].every((prop) => prop in obj.Scrape);
   }
 
   return false;
 }
 
+// TODO missing chat_id
 export interface Notify {
   Notify: {
     id: string;
+    chat_id: string;
   };
 }
 

@@ -82,10 +82,14 @@ pub enum Messages {
     },
     Scrape {
         id: String,
+        chat_id: Option<String>,
         url: String,
         script: String,
     },
-    Notify,
+    Notify {
+        id: String,
+        chat_id: String,
+    },
 }
 
 pub struct Consumer {
@@ -171,7 +175,6 @@ impl Broker for Rabbit {
         Ok(())
     }
 
-    // TODO how stream! works?
     async fn subscribe(&self, exchange: Exchanges) -> Result<Consumer, BrokerErrors> {
         let exchange_name = &exchange.to_string();
         self.declare_exchange(exchange_name).await?;
@@ -213,12 +216,12 @@ impl Broker for Rabbit {
                             yield message;
                         }
                         Err(error) => {
-                            error!("Invalid message format in scheduler consumer. {}", error);
+                            error!("broker.stream!. {}", error);
                         }
                     }
 
                     if let Err(error) = channel.basic_ack(msg.delivery_tag, BasicAckOptions::default()).await {
-                        error!("Error in basic_ack. {}", error);
+                        error!("broker.stream.basic_ack. {}", error);
                     }
                 }
             }

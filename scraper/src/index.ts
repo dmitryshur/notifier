@@ -1,12 +1,13 @@
 import winston from 'winston';
 import Broker, { isScrape } from './broker';
+import Scraper from './scraper';
 import type { Scrape, Notify } from './broker';
 
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
   defaultMeta: { service: 'scraper' },
-  transports: [new winston.transports.Console(), new winston.transports.File({ filename: 'logs.log' })],
+  transports: [new winston.transports.Console()],
 });
 
 (async function main() {
@@ -25,14 +26,31 @@ const logger = winston.createLogger({
     throw error;
   }
 
+  const scraper = new Scraper();
   try {
-    await broker.subscribe('scraper', (msg) => {
+    await broker.subscribe('scraper', async (msg) => {
       const content = msg?.content.toString();
 
       if (isScrape(content)) {
         const message: Scrape = JSON.parse(content);
-        // TODO handle msg
-        logger.info(`msg received. ${message}`);
+        const isSuccess = await scraper.run(message.Scrape.url, message.Scrape.script);
+
+        // TODO send msg to bot on success. notify user
+        // TODO switch to redis
+        // TODO handle /list command in bot
+        if (isSuccess) {
+          logger.info(`success. send message`);
+          const brokerMsg: Notify = {
+            Notify: {
+              id: message.Scrape.id,
+              chat_id: message.Scrape.chat_id,
+            },
+          };
+
+          await broker.publish('bot', brokerMsg);
+        } else {
+          logger.info('not success');
+        }
       }
     });
   } catch (error) {
