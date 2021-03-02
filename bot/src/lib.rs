@@ -135,6 +135,16 @@ where
         }
     }
 
+    pub fn notify(&self, message: Messages) {
+        if let Messages::Notify { id, chat_id, url } = message {
+            let chat_id = chat_id.parse::<i64>().unwrap();
+            let chat = ChatId::new(chat_id);
+            let msg = format!("Script executed successfully.\nurl: {}.\nid: {}\n", url, id);
+
+            self.api.spawn(chat.text(msg))
+        }
+    }
+
     async fn handle_start(&self, input: &[&str], user_id: UserId) -> Result<BotResponse, BotErrors> {
         match input.get(0) {
             Some(id) => {

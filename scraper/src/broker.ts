@@ -22,11 +22,11 @@ export function isScrape(msg: any): msg is Scrape {
   return false;
 }
 
-// TODO missing chat_id
 export interface Notify {
   Notify: {
     id: string;
     chat_id: string;
+    url: string;
   };
 }
 

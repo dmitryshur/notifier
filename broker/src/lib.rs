@@ -89,6 +89,7 @@ pub enum Messages {
     Notify {
         id: String,
         chat_id: String,
+        url: String
     },
 }
 

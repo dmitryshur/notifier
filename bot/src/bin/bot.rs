@@ -1,7 +1,7 @@
 use bot::TelegramBot;
-use broker::{Broker, Exchanges, Rabbit};
+use broker::{Broker, Exchanges, Messages, Rabbit};
 use log::{error, info};
-use std::{env, process};
+use std::{env, process, sync::Arc};
 use tokio_stream::StreamExt;
 
 #[tokio::main]
@@ -29,12 +29,14 @@ async fn main() {
     };
     let mut consumer = consumer.into_inner();
 
+    let bot = Arc::new(TelegramBot::new(token, broker));
+    let bot_clone = Arc::clone(&bot);
+
     tokio::spawn(async move {
         while let Some(value) = consumer.next().await {
-            info!("the msg is: {:?}", value);
+            bot_clone.notify(value);
         }
     });
 
-    let bot = TelegramBot::new(token, broker);
     bot.start().await;
 }

@@ -35,7 +35,6 @@ const logger = winston.createLogger({
         const message: Scrape = JSON.parse(content);
         const isSuccess = await scraper.run(message.Scrape.url, message.Scrape.script);
 
-        // TODO send msg to bot on success. notify user
         // TODO switch to redis
         // TODO handle /list command in bot
         if (isSuccess) {
@@ -44,6 +43,7 @@ const logger = winston.createLogger({
             Notify: {
               id: message.Scrape.id,
               chat_id: message.Scrape.chat_id,
+              url: message.Scrape.url,
             },
           };
 
