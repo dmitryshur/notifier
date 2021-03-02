@@ -1,4 +1,6 @@
 pub mod store;
+pub mod fs_store;
+pub mod redis_store;
 
 use crate::store::Record;
 use broker::{Broker, Exchanges, Messages};

@@ -1,6 +1,6 @@
 use broker::{Broker, Exchanges, Rabbit};
 use log::{error, info};
-use scheduler::{store::FileStore, Scheduler};
+use scheduler::{fs_store::FileStore, redis_store::RedisStore, Scheduler};
 use std::env;
 use tokio_stream::StreamExt;
 
@@ -8,12 +8,13 @@ use tokio_stream::StreamExt;
 async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
-    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Cant find RABBIT_ADDRESS");
+    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Can't find RABBIT_ADDRESS env variable");
+    let redis_address = env::var("REDIS_ADDRESS").expect("Can't find REDIS_ADDRESS env variable");
 
     let broker = match Rabbit::new(&rabbit_address).await {
         Ok(broker) => broker,
         Err(error) => {
-            error!("Can't connect to rabbit. {}", error);
+            error!("scheduler.Rabbit.new. {}", error);
             std::process::exit(1);
         }
     };
@@ -21,7 +22,7 @@ async fn main() -> std::io::Result<()> {
     let consumer = match broker.subscribe(Exchanges::Scheduler).await {
         Ok(consumer) => consumer,
         Err(error) => {
-            error!("Can't create scheduler consumer. {}", error);
+            error!("scheduler.broker.subscribe. {}", error);
             std::process::exit(1);
         }
     };
@@ -30,7 +31,7 @@ async fn main() -> std::io::Result<()> {
     let file_store = match FileStore::new("data.csv") {
         Ok(file) => file,
         Err(error) => {
-            error!("Error creating/opening csv data file. {}", error);
+            error!("scheduler.FileStore.new. {}", error);
             std::process::exit(1);
         }
     };
@@ -38,7 +39,7 @@ async fn main() -> std::io::Result<()> {
     let scheduler = match Scheduler::new(broker, file_store).await {
         Ok(scheduler) => scheduler,
         Err(error) => {
-            error!("Can't create scheduler. {}", error);
+            error!("scheduler.Scheduler.new. {}", error);
             std::process::exit(1);
         }
     };
@@ -46,7 +47,7 @@ async fn main() -> std::io::Result<()> {
     info!("Listening for messages in scheduler");
     while let Some(value) = consumer.next().await {
         if let Err(error) = scheduler.receive(value).await {
-            error!("Error in receiving message in scheduler. error: {}", error);
+            error!("scheduler.receive. {}", error);
         }
     }
 

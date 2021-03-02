@@ -15,7 +15,7 @@ async fn main() {
     let broker = match Rabbit::new(&rabbit_address).await {
         Ok(broker) => broker,
         Err(error) => {
-            error!("bot.Rabbit. {}", error);
+            error!("bot.Rabbit.new. {}", error);
             process::exit(1);
         }
     };

@@ -97,10 +97,7 @@ where
             let update = match &update {
                 Ok(update) => update,
                 Err(error) => {
-                    error!(
-                        "Error in receiving update message in bot. message: {:?}. error: {}",
-                        update, error
-                    );
+                    error!("bot.start.next. message: {:?}. error: {}", update, error);
                     continue;
                 }
             };

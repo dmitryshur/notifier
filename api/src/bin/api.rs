@@ -8,13 +8,13 @@ use std::sync::Arc;
 async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
-    let api_address = env::var("API_ADDRESS").expect("Cant find API_ADDRESS");
-    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Cant find RABBIT_ADDRESS");
+    let api_address = env::var("API_ADDRESS").expect("Can't find API_ADDRESS env variable");
+    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Can't find RABBIT_ADDRESS env variable");
 
     let broker = match broker::Rabbit::new(&rabbit_address).await {
         Ok(broker) => broker,
         Err(error) => {
-            error!("Can't connect to rabbit. {}", error);
+            error!("api.Rabbit.new. {}", error);
             std::process::exit(1);
         }
     };

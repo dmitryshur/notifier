@@ -8,3 +8,10 @@ services:
     ports:
       - 5672:5672
       - 15672:15672
+
+  redis:
+    build:
+      context: ./redis
+    restart: always
+    ports:
+      - 6379:6379
