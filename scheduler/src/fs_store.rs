@@ -75,7 +75,6 @@ impl Store for FileStore {
         Ok(())
     }
 
-    // TODO should change is_deleted to true
     fn remove(&self, _id: &str) -> Result<(), SchedulerErrors> {
         todo!()
     }

@@ -35,8 +35,6 @@ const logger = winston.createLogger({
         const message: Scrape = JSON.parse(content);
         const isSuccess = await scraper.run(message.Scrape.url, message.Scrape.script);
 
-        // TODO switch to redis
-        // TODO handle /list command in bot
         if (isSuccess) {
           logger.info(`success. send message`);
           const brokerMsg: Notify = {
@@ -49,7 +47,7 @@ const logger = winston.createLogger({
 
           await broker.publish('bot', brokerMsg);
         } else {
-          logger.info('not success');
+          logger.info(`Failure in scraper. message: ${message}`);
         }
       }
     });

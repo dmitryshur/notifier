@@ -1,6 +1,6 @@
 use broker::{Broker, Exchanges, Rabbit};
 use log::{error, info};
-use scheduler::{fs_store::FileStore, redis_store::RedisStore, Scheduler};
+use scheduler::{redis_store::RedisStore, Scheduler};
 use std::env;
 use tokio_stream::StreamExt;
 
@@ -28,15 +28,22 @@ async fn main() -> std::io::Result<()> {
     };
     let mut consumer = consumer.into_inner();
 
-    let file_store = match FileStore::new("data.csv") {
-        Ok(file) => file,
+    // let file_store = match FileStore::new("data.csv") {
+    //     Ok(file) => file,
+    //     Err(error) => {
+    //         error!("scheduler.FileStore.new. {}", error);
+    //         std::process::exit(1);
+    //     }
+    // };
+    let redis_store = match RedisStore::new(&redis_address).await {
+        Ok(redis) => redis,
         Err(error) => {
-            error!("scheduler.FileStore.new. {}", error);
+            error!("scheduler.RedisStore.new. {}", error);
             std::process::exit(1);
         }
     };
 
-    let scheduler = match Scheduler::new(broker, file_store).await {
+    let scheduler = match Scheduler::new(broker, redis_store).await {
         Ok(scheduler) => scheduler,
         Err(error) => {
             error!("scheduler.Scheduler.new. {}", error);

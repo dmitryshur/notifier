@@ -2383,6 +2383,7 @@ dependencies = [
 name = "scheduler"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "broker",
  "csv",
  "log 0.4.14",

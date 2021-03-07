@@ -1,6 +1,6 @@
 use bot::TelegramBot;
-use broker::{Broker, Exchanges, Messages, Rabbit};
-use log::{error, info};
+use broker::{Broker, Exchanges, Rabbit};
+use log::error;
 use std::{env, process, sync::Arc};
 use tokio_stream::StreamExt;
 
@@ -9,8 +9,6 @@ async fn main() {
     pretty_env_logger::init();
     let token = env::var("BOT_TOKEN").expect("Can't find BOT_TOKEN env variable");
     let rabbit_address = env::var("RABBIT_ADDRESS").expect("Cant find RABBIT_ADDRESS env variable");
-
-    let token = Box::leak(token.into_boxed_str());
 
     let broker = match Rabbit::new(&rabbit_address).await {
         Ok(broker) => broker,

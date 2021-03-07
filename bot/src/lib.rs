@@ -76,7 +76,6 @@ where
     T: Broker + Send + Sync + 'static,
 {
     api: Api,
-    token: &'static str,
     broker: T,
 }
 
@@ -84,10 +83,10 @@ impl<T> TelegramBot<T>
 where
     T: Broker + Send + Sync + 'static,
 {
-    pub fn new(token: &'static str, broker: T) -> Self {
+    pub fn new(token: String, broker: T) -> Self {
         let api = Api::new(token);
 
-        Self { api, token, broker }
+        Self { api, broker }
     }
 
     pub async fn start(&self) {
