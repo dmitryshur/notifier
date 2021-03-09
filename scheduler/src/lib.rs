@@ -158,6 +158,27 @@ where
                     }
                 }
             }
+            Messages::List { chat_id } => match self.store.load().await {
+                Ok(records) => {
+                    let records: Vec<(String, String)> = records
+                        .into_iter()
+                        .filter_map(|(id, record)| {
+                            if record.chat_id.is_some() && record.chat_id.unwrap() == chat_id {
+                                Some((record.url, id))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let msg = Messages::ListResponse { records, chat_id };
+                    if let Err(error) = self.broker.publish(Exchanges::Bot, msg).await {
+                        error!("scheduler.receive.List.publish. {}", error);
+                    }
+                }
+                Err(error) => {
+                    error!("scheduler.receive.List. {}", error);
+                }
+            },
             _ => {}
         }
 

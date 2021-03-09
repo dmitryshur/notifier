@@ -62,34 +62,44 @@ impl fmt::Display for Exchanges {
     }
 }
 
-// create (api -> scheduler)
-// delete (bot -> scheduler)
-// activate (bot -> scheduler)
-// scrape (scheduler -> scraper)
-// notify (scraper -> bot)
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Messages {
+    // api -> scheduler
     Create {
         id: String,
         url: String,
         script: String,
         interval: u64,
     },
+    // bot -> scheduler
     Delete,
+    // bot -> scheduler
     Activate {
         id: String,
         chat_id: String,
     },
+    // scheduler -> scraper
     Scrape {
         id: String,
         chat_id: Option<String>,
         url: String,
         script: String,
     },
+    // scraper -> bot
     Notify {
         id: String,
         chat_id: String,
-        url: String
+        url: String,
+    },
+    // bot -> scheduler
+    List {
+        chat_id: String,
+    },
+    // scheduler -> bot
+    ListResponse {
+        // (url, id)
+        records: Vec<(String, String)>,
+        chat_id: String,
     },
 }
 

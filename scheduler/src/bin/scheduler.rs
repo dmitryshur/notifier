@@ -28,13 +28,6 @@ async fn main() -> std::io::Result<()> {
     };
     let mut consumer = consumer.into_inner();
 
-    // let file_store = match FileStore::new("data.csv") {
-    //     Ok(file) => file,
-    //     Err(error) => {
-    //         error!("scheduler.FileStore.new. {}", error);
-    //         std::process::exit(1);
-    //     }
-    // };
     let redis_store = match RedisStore::new(&redis_address).await {
         Ok(redis) => redis,
         Err(error) => {

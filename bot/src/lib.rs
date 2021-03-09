@@ -30,7 +30,7 @@ impl error::Error for BotErrors {
 enum BotResponse {
     Start { id: Option<String> },
     Help,
-    List { ids: Vec<String> },
+    List,
 }
 
 impl fmt::Display for BotResponse {
@@ -55,8 +55,8 @@ impl fmt::Display for BotResponse {
                 .join("\n");
                 f.write_str(&string)
             }
-            Self::List { ids } => {
-                write!(f, "The list of ids is: {:?}", ids)
+            Self::List => {
+                write!(f, "Checking for active notifications...")
             }
         }
     }
@@ -93,51 +93,85 @@ where
         let mut stream = self.api.stream();
 
         while let Some(update) = stream.next().await {
-            let update = match &update {
+            let update = match update {
                 Ok(update) => update,
                 Err(error) => {
-                    error!("bot.start.next. message: {:?}. error: {}", update, error);
+                    error!("bot.start.next. error: {}", error);
                     continue;
                 }
             };
 
             // TODO maybe handle edit command as well
-            if let UpdateKind::Message(message) = &update.kind {
-                if let MessageKind::Text { data, .. } = &message.kind {
-                    let strings: Vec<&str> = data.split(' ').collect();
+            match update.kind {
+                UpdateKind::Message(message) => {
+                    let chat_id = message.from.id;
 
-                    let response = match *strings.first().unwrap() {
-                        "/start" => self.handle_start(&strings[1..], message.from.id).await,
-                        "/help" => self.handle_help().await,
-                        "/list" => self.handle_list().await,
-                        _ => {
-                            info!("Invalid message received from bot. {:?}", data);
-                            continue;
-                        }
-                    };
+                    if let MessageKind::Text { data, .. } = &message.kind {
+                        let strings: Vec<&str> = data.split(' ').collect();
 
-                    let chat = ChatId::from(message.from.id);
+                        let response = match *strings.first().unwrap() {
+                            "/start" => self.handle_start(&strings[1..], message.from.id).await,
+                            "/help" => self.handle_help().await,
+                            "/list" => self.handle_list(chat_id).await,
+                            _ => {
+                                info!("Invalid message received from bot. {:?}", data);
+                                continue;
+                            }
+                        };
 
-                    match response {
-                        Ok(response) => {
-                            self.api.spawn(chat.text(response.to_string()));
-                        }
-                        Err(error) => {
-                            self.api.spawn(chat.text(error.to_string()));
+                        let chat = ChatId::from(chat_id);
+                        match response {
+                            Ok(response) => {
+                                self.api.spawn(chat.text(response.to_string()));
+                            }
+                            Err(error) => {
+                                self.api.spawn(chat.text(error.to_string()));
+                            }
                         }
                     }
+                }
+                UpdateKind::CallbackQuery(query) => {
+                    let data = match query.data {
+                        Some(data) => data,
+                        None => "no data".to_string(),
+                    };
+
+                    info!("got query. data: {}", data);
+                }
+                _ => {
+                    info!("got something else");
                 }
             }
         }
     }
 
-    pub fn notify(&self, message: Messages) {
-        if let Messages::Notify { id, chat_id, url } = message {
-            let chat_id = chat_id.parse::<i64>().unwrap();
-            let chat = ChatId::new(chat_id);
-            let msg = format!("Script executed successfully.\nurl: {}.\nid: {}\n", url, id);
+    pub fn receive(&self, message: Messages) {
+        match message {
+            Messages::Notify { id, chat_id, url } => {
+                let chat_id = chat_id.parse::<i64>().unwrap();
+                let chat = ChatId::new(chat_id);
+                let msg = format!("Script executed successfully.\nurl: {}.\nid: {}\n", url, id);
 
-            self.api.spawn(chat.text(msg))
+                self.api.spawn(chat.text(msg))
+            }
+            Messages::ListResponse { records, chat_id } => {
+                let chat_id = chat_id.parse::<i64>().unwrap();
+                let chat = ChatId::new(chat_id);
+
+                let markup: Vec<Vec<InlineKeyboardButton>> = records
+                    .into_iter()
+                    .map(|(url, id)| {
+                        let text = format!("{} - {}", url, id);
+                        vec![InlineKeyboardButton::callback(text, id)]
+                    })
+                    .collect();
+
+                self.api.spawn(
+                    chat.text("These are the currently active subscriptions. Click to unsubscribe.\n")
+                        .reply_markup(markup),
+                );
+            }
+            _ => {}
         }
     }
 
@@ -166,9 +200,16 @@ where
         Ok(BotResponse::Help)
     }
 
-    async fn handle_list(&self) -> Result<BotResponse, BotErrors> {
-        Ok(BotResponse::List {
-            ids: vec![String::from("123")],
-        })
+    async fn handle_list(&self, chat_id: UserId) -> Result<BotResponse, BotErrors> {
+        let msg = Messages::List {
+            chat_id: chat_id.to_string(),
+        };
+
+        self.broker.publish(Exchanges::Scheduler, msg).await.map_err(|error| {
+            error!("bot.handle_list.publish. {}", error);
+            BotErrors::List
+        })?;
+
+        Ok(BotResponse::List)
     }
 }
