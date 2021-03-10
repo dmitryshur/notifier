@@ -179,6 +179,14 @@ where
                     error!("scheduler.receive.List. {}", error);
                 }
             },
+            Messages::Delete { id } => {
+                let mut intervals = self.intervals.lock();
+                intervals.remove(&id);
+
+                if let Err(error) = self.store.delete(&id).await {
+                    error!("scheduler.receive.Delete. {}", error);
+                }
+            }
             _ => {}
         }
 

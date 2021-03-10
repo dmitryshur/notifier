@@ -4,7 +4,6 @@ use log::error;
 use std::{env, process, sync::Arc};
 use tokio_stream::StreamExt;
 
-// TODO handle list command. should provide list of ids, on click, delete the record with the id
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();

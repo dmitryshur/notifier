@@ -72,7 +72,9 @@ pub enum Messages {
         interval: u64,
     },
     // bot -> scheduler
-    Delete,
+    Delete {
+        id: String,
+    },
     // bot -> scheduler
     Activate {
         id: String,
@@ -120,7 +122,6 @@ pub trait Broker {
 }
 
 pub struct Rabbit {
-    connection: Connection,
     channel: Channel,
 }
 
@@ -147,7 +148,7 @@ impl Rabbit {
         };
         let channel = connection.create_channel().await?;
 
-        Ok(Self { connection, channel })
+        Ok(Self { channel })
     }
 
     async fn declare_exchange(&self, exchange_name: &str) -> Result<(), BrokerErrors> {

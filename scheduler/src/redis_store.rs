@@ -29,6 +29,9 @@ pub enum Command {
         id: String,
         sender_once: oneshot::Sender<Option<Record>>,
     },
+    Delete {
+        id: String,
+    },
 }
 
 pub struct RedisStore {
@@ -103,6 +106,9 @@ impl RedisStore {
                             }
                         }
                     },
+                    Command::Delete { id } => {
+                        Self::handle_delete(&mut connection, id).await;
+                    }
                 }
             }
         });
@@ -245,6 +251,26 @@ impl RedisStore {
             Err(error) => Err(SchedulerErrors::Redis(error)),
         };
     }
+
+    async fn handle_delete(connection: &mut Connection, id: String) {
+        if let Err(error) = redis::pipe()
+            .atomic()
+            .cmd("HDEL")
+            .arg(&id)
+            .arg("id")
+            .arg("url")
+            .arg("interval")
+            .arg("script")
+            .arg("chat_id")
+            .cmd("ZREM")
+            .arg("ids")
+            .arg(&id)
+            .query_async::<Connection, ()>(connection)
+            .await
+        {
+            error!("scheduler.redis_store.Command.delete. {}", error);
+        }
+    }
 }
 
 #[async_trait]
@@ -295,8 +321,11 @@ impl Store for RedisStore {
         Ok(())
     }
 
-    // TODO 4
-    async fn remove(&self, _id: &str) -> Result<(), SchedulerErrors> {
-        unimplemented!()
+    async fn delete(&self, id: &str) -> Result<(), SchedulerErrors> {
+        let mut sender = self.sender.clone();
+        let command = Command::Delete { id: id.into() };
+        sender.send(command).await?;
+
+        Ok(())
     }
 }

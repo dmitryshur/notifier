@@ -629,6 +629,7 @@ dependencies = [
  "telegram-bot",
  "tokio 0.2.25",
  "tokio-stream",
+ "uuid",
 ]
 
 [[package]]

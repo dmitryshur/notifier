@@ -1,8 +1,9 @@
 use broker::{Broker, Exchanges, Messages};
 use log::{error, info};
-use std::{error, fmt};
+use std::{error, fmt, str::FromStr};
 use telegram_bot::*;
 use tokio::stream::StreamExt;
+use uuid::Uuid;
 
 #[derive(Debug)]
 enum BotErrors {
@@ -62,15 +63,6 @@ impl fmt::Display for BotResponse {
     }
 }
 
-// /start=script_id sent on button click. bot sends msg to scheduler { script_id, chat_id }.
-// on notify, scraper sends msg to bot { chat_id, url, }
-// /list returns a list with all the active intervals. to get them, bot sends a message to scheduler
-// { chat_id }. scheduler returns { ids }. when an id is clicked, bot sends a message to scheduler {
-// { id }. scheduler deletes it from intervals and data file.
-// https://api.telegram.org/bot<token>/METHOD_NAME
-// https://t.me/TestingBot42_bot?start=hello1
-
-// start {id}, help, list
 pub struct TelegramBot<T>
 where
     T: Broker + Send + Sync + 'static,
@@ -101,7 +93,6 @@ where
                 }
             };
 
-            // TODO maybe handle edit command as well
             match update.kind {
                 UpdateKind::Message(message) => {
                     let chat_id = message.from.id;
@@ -131,15 +122,29 @@ where
                     }
                 }
                 UpdateKind::CallbackQuery(query) => {
-                    let data = match query.data {
-                        Some(data) => data,
-                        None => "no data".to_string(),
-                    };
+                    let chat = ChatId::from(query.from.id);
 
-                    info!("got query. data: {}", data);
+                    if let Some(data) = query.data {
+                        // Not sure, but perhaps invalid data might be passed somehow. make sure that
+                        // at least the format is correct
+                        if let Err(error) = Uuid::from_str(&data) {
+                            error!("bot.CallbackQuery.from_str. {}", error);
+                            self.api.spawn(chat.text("Server error. try again later"));
+                            continue;
+                        }
+
+                        let msg = Messages::Delete { id: data };
+                        if let Err(error) = self.broker.publish(Exchanges::Scheduler, msg).await {
+                            error!("bot.CallbackQuery.publish. {}", error);
+                            self.api.spawn(chat.text("Server error. try again later"));
+                            continue;
+                        }
+
+                        self.api.spawn(chat.text("Unsubscribed successfully"));
+                    }
                 }
                 _ => {
-                    info!("got something else");
+                    info!("bot.other_kind");
                 }
             }
         }
@@ -166,12 +171,18 @@ where
                     })
                     .collect();
 
-                self.api.spawn(
-                    chat.text("These are the currently active subscriptions. Click to unsubscribe.\n")
-                        .reply_markup(markup),
-                );
+                if markup[0].is_empty() {
+                    self.api.spawn(chat.text("There are not active subscriptions.\n"));
+                } else {
+                    self.api.spawn(
+                        chat.text("These are the currently active subscriptions. Click to unsubscribe.\n")
+                            .reply_markup(markup),
+                    );
+                }
             }
-            _ => {}
+            _ => {
+                info!("bot.receiver.other_kind");
+            }
         }
     }
 

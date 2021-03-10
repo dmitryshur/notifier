@@ -75,7 +75,7 @@ impl Store for FileStore {
         Ok(())
     }
 
-    fn remove(&self, _id: &str) -> Result<(), SchedulerErrors> {
+    fn delete(&self, _id: &str) -> Result<(), SchedulerErrors> {
         todo!()
     }
 }

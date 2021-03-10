@@ -18,5 +18,5 @@ pub trait Store {
     async fn get(&self, id: &str) -> Result<Option<Record>, SchedulerErrors>;
     async fn add(&self, record: Record) -> Result<(), SchedulerErrors>;
     async fn update(&self, id: &str, chat_id: &str) -> Result<(), SchedulerErrors>;
-    async fn remove(&self, id: &str) -> Result<(), SchedulerErrors>;
+    async fn delete(&self, id: &str) -> Result<(), SchedulerErrors>;
 }

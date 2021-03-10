@@ -13,3 +13,4 @@ pretty_env_logger = "0.3"
 tokio = { version = "0.2", features = ["full"] }
 broker = { path = "../broker" }
 tokio-stream = "0.1"
+uuid = { version = "0.8", features = ["serde", "v4"] }
