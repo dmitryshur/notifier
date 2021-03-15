@@ -1,3 +1,4 @@
+use actix_web::http::Method;
 use actix_web::{web, App, HttpServer};
 use log::error;
 use parking_lot::Mutex;
@@ -26,6 +27,7 @@ async fn main() -> std::io::Result<()> {
                 broker: Arc::clone(&broker),
             })
             .route("/create", web::post().to(api::create_handler::<broker::Rabbit>))
+            .route("/create", web::method(Method::OPTIONS).to(api::create_options))
     })
     .bind(api_address)?
     .run()

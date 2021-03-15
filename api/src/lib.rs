@@ -2,10 +2,7 @@ use actix_web::{self, body::Body, dev, error, http::StatusCode, web, HttpRespons
 use broker::{Broker, BrokerErrors, Exchanges, Messages};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::fmt;
-use std::ops::RangeInclusive;
-use std::sync::Arc;
+use std::{error::Error, fmt, ops::RangeInclusive, sync::Arc};
 
 const MIN_INTERVAL: u64 = 5;
 const MAX_INTERVAL: u64 = 604_800; // Week in seconds
@@ -74,7 +71,9 @@ impl error::ResponseError for ApiErrors {
             }
         }
 
-        dev::HttpResponseBuilder::new(self.status_code()).json(res)
+        dev::HttpResponseBuilder::new(self.status_code())
+            .header("Access-Control-Allow-Origin", "http://localhost:3000")
+            .json(res)
     }
 }
 
@@ -153,8 +152,20 @@ where
     };
     state.broker.lock().publish(Exchanges::Scheduler, msg).await?;
 
-    Ok(HttpResponse::Ok().json(CreateResponse {
-        id: Some(id.to_string()),
-        error: None,
-    }))
+    // This will be changed to either work with the Origin header, or use a port from an env variable
+    Ok(HttpResponse::Ok()
+        .header("Access-Control-Allow-Origin", "http://localhost:3000")
+        .json(CreateResponse {
+            id: Some(id.to_string()),
+            error: None,
+        }))
+}
+
+pub async fn create_options() -> Result<HttpResponse, ApiErrors> {
+    Ok(HttpResponse::Ok()
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Methods", "POST")
+        .header("Access-Control-Allow-Headers", "content-type")
+        .header("Access-Control-Max-Age", "86400")
+        .finish())
 }
