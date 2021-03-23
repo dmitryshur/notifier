@@ -11,13 +11,13 @@ const logger = winston.createLogger({
 });
 
 (async function main() {
-  const rabbitAddress = process.env.RABBIT_ADDRESS;
-  if (!rabbitAddress) {
-    logger.error("Can't find RABBIT_ADDRESS env variable");
+  const rabbitHost = process.env.RABBIT_HOST;
+  if (!rabbitHost) {
+    logger.error("Can't find RABBIT_HOST env variable");
     process.exit(1);
   }
 
-  const broker = new Broker(rabbitAddress);
+  const broker = new Broker(rabbitHost);
 
   try {
     await broker.init();

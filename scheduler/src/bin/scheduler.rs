@@ -8,10 +8,10 @@ use tokio_stream::StreamExt;
 async fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
-    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Can't find RABBIT_ADDRESS env variable");
-    let redis_address = env::var("REDIS_ADDRESS").expect("Can't find REDIS_ADDRESS env variable");
+    let rabbit_host = env::var("RABBIT_HOST").expect("Can't find RABBIT_HOST env variable");
+    let redis_host = env::var("REDIS_HOST").expect("Can't find REDIS_HOST env variable");
 
-    let broker = match Rabbit::new(&rabbit_address).await {
+    let broker = match Rabbit::new(&rabbit_host).await {
         Ok(broker) => broker,
         Err(error) => {
             error!("scheduler.Rabbit.new. {}", error);
@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     };
     let mut consumer = consumer.into_inner();
 
-    let redis_store = match RedisStore::new(&redis_address).await {
+    let redis_store = match RedisStore::new(&redis_host).await {
         Ok(redis) => redis,
         Err(error) => {
             error!("scheduler.RedisStore.new. {}", error);

@@ -1,0 +1,71 @@
+version: "3.8"
+
+# TODO create simply workspace project, try to cache build deps
+# TODO launch rabbit and api only. figure out why the latter can't connect to the former
+# TODO fix docker file. cache build dependencies first, build everything else later
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.8.10-management
+    hostname: rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+
+  redis:
+    container_name: redis
+    build:
+      context: ./redis
+    restart: always
+    ports:
+      - 6379:6379
+
+  api:
+    container_name: api
+    build:
+      context: .
+      target: api-prod
+      args:
+        API_PORT: 4000
+    restart: always
+    environment:
+      API_HOST: http://api:4000
+      RABBIT_HOST: amqp://rabbitmq:5672
+    ports:
+      - 4000:4000
+
+  bot:
+    container_name: bot
+    build:
+      context: .
+      target: bot-prod
+      args:
+        API_PORT: 4000
+    restart: always
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672
+      BOT_TOKEN: 1567141444:AAGwrhnoqgUCBhyJBrI9Mb-Py_ux50B6UgQ
+
+  scheduler:
+    container_name: scheduler
+    build:
+      context: .
+      target: scheduler-prod
+      args:
+        API_PORT: 4000
+    restart: always
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672
+      REDIS_HOST: redis://redis:6379
+
+  scraper:
+    container_name: scraper
+    build:
+      context: .
+      target: scraper-prod
+      args:
+        API_PORT: 4000
+    restart: always
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672

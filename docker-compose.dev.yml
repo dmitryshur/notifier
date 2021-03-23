@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   rabbitmq:
@@ -15,3 +15,58 @@ services:
     restart: always
     ports:
       - 6379:6379
+
+  api:
+    build:
+      context: .
+      target: api-dev
+    volumes:
+      - ./api:/app/api:delegated
+      - ./bot:/app/bot:delegated
+      - ./broker:/app/broker:delegated
+      - ./scheduler:/app/scheduler:delegated
+      - target:/app/target
+    environment:
+      API_HOST: api:4000
+      RABBIT_HOST: amqp://rabbitmq:5672
+    ports:
+      - 4000:4000
+
+  bot:
+    build:
+      context: .
+      target: bot-dev
+    volumes:
+      - ./api:/app/api:delegated
+      - ./bot:/app/bot:delegated
+      - ./broker:/app/broker:delegated
+      - ./scheduler:/app/scheduler:delegated
+      - target:/app/target
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672
+      BOT_TOKEN: 1567141444:AAGwrhnoqgUCBhyJBrI9Mb-Py_ux50B6UgQ
+
+  scheduler:
+    build:
+      context: .
+      target: scheduler-dev
+    volumes:
+      - ./api:/app/api:delegated
+      - ./bot:/app/bot:delegated
+      - ./broker:/app/broker:delegated
+      - ./scheduler:/app/scheduler:delegated
+      - target:/app/target
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672
+      REDIS_HOST: redis://redis:6379
+
+  scraper:
+    build:
+      context: .
+    volumes:
+    - ./scraper/src:/app/scraper/src:delegated
+    environment:
+      RABBIT_HOST: amqp://rabbitmq:5672
+
+volumes:
+  target:

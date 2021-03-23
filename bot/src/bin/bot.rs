@@ -8,9 +8,9 @@ use tokio_stream::StreamExt;
 async fn main() {
     pretty_env_logger::init();
     let token = env::var("BOT_TOKEN").expect("Can't find BOT_TOKEN env variable");
-    let rabbit_address = env::var("RABBIT_ADDRESS").expect("Cant find RABBIT_ADDRESS env variable");
+    let rabbit_host = env::var("RABBIT_HOST").expect("Cant find RABBIT_HOST env variable");
 
-    let broker = match Rabbit::new(&rabbit_address).await {
+    let broker = match Rabbit::new(&rabbit_host).await {
         Ok(broker) => broker,
         Err(error) => {
             error!("bot.Rabbit.new. {}", error);
