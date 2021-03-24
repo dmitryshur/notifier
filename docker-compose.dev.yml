@@ -63,6 +63,7 @@ services:
   scraper:
     build:
       context: .
+      target: scraper
     volumes:
     - ./scraper/src:/app/scraper/src:delegated
     environment:
