@@ -92,8 +92,6 @@ FROM rust:1.50.0 AS api-prod
 WORKDIR /app
 EXPOSE 4000
 COPY --from=rust-prod /app/target/release/api ./api
-RUN ls /
-RUN ls /app
 ENTRYPOINT ["/app/api"]
 
 FROM rust:1.50.0 AS bot-prod
@@ -105,3 +103,7 @@ FROM rust:1.50.0 AS scheduler-prod
 WORKDIR /app
 COPY --from=rust-prod /app/target/release/scheduler ./scheduler
 ENTRYPOINT ["/app/scheduler"]
+
+FROM redis:6.0.9 AS redis
+COPY ./redis/redis.conf /usr/local/etc/redis/redis.conf
+ENTRYPOINT ["redis-server", "/usr/local/etc/redis/redis.conf"]
