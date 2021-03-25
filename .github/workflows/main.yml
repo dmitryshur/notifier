@@ -1,0 +1,100 @@
+name: Test and deploy
+on:
+  release:
+    types: [ created ]
+
+jobs:
+  test:
+    name: Test rust code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo test
+
+  push_to_registry:
+    name: Push docker images to Dockerhub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Dockerhub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push redis
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          target: redis
+          tags: shurikdima/notifier-redis:latest
+
+      - name: Build and push api-prod
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          target: api-prod
+          tags: shurikdima/notifier-api:${{ github.event.release.tag_name }}
+
+      - name: Build and push bot-prod
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          target: bot-prod
+          tags: shurikdima/notifier-bot:${{ github.event.release.tag_name }}
+
+      - name: Build and push scheduler-prod
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          target: scheduler-prod
+          tags: shurikdima/notifier-scheduler:${{ github.event.release.tag_name }}
+
+      - name: Build and push scraper
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          target: scraper
+          tags: shurikdima/notifier-scraper:${{ github.event.release.tag_name }}
+
+  deploy:
+    name: Deploy to server
+    needs: push_to_registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: docker-compose copy
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/home/dshur/notifier"
+
+      - name: Execute remote ssh commands using ssh key
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ~/notifier
+            docker-compose -f docker-compose.prod.yml down --rmi all --remove-orphans
+            sed -i 's/{{tag}}/${{ github.event.release.tag_name }}/g' docker-compose.prod.yml
+            docker-compose -f docker-compose.prod.yml up -d
