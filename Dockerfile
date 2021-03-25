@@ -92,8 +92,6 @@ FROM rust:1.50.0 AS api-prod
 WORKDIR /app
 EXPOSE 4000
 COPY --from=rust-prod /app/target/release/api ./api
-RUN ls /
-RUN ls /app
 ENTRYPOINT ["/app/api"]
 
 FROM rust:1.50.0 AS bot-prod
