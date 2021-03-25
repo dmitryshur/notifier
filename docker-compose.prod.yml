@@ -22,6 +22,7 @@ services:
     build:
       context: .
       target: api-prod
+    image: shurikdima/notifier-api:latest
     restart: always
     environment:
       API_HOST: api:4000
@@ -30,30 +31,22 @@ services:
       - 4000:4000
 
   bot:
-    build:
-      context: .
-      target: bot-prod
+    image: shurikdima/notifier-bot:latest
     restart: always
     environment:
       RABBIT_HOST: amqp://rabbitmq:5672
       BOT_TOKEN: 1567141444:AAGwrhnoqgUCBhyJBrI9Mb-Py_ux50B6UgQ
 
   scheduler:
-    build:
-      context: .
-      target: scheduler-prod
+    image: shurikdima/notifier-scheduler:latest
     restart: always
     environment:
       RABBIT_HOST: amqp://rabbitmq:5672
       REDIS_HOST: redis://redis:6379
 
   scraper:
-    build:
-      context: .
-      target: scraper
+    image: shurikdima/notifier-scraper:latest
     restart: always
-    volumes:
-      - ./scraper/src:/app/scraper/src:delegated
     environment:
       RABBIT_HOST: amqp://rabbitmq:5672
 
