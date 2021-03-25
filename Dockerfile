@@ -26,14 +26,14 @@ COPY scheduler/Cargo.toml .
 WORKDIR /app
 RUN cargo build
 
-FROM rust-dev-builder as api-dev
+FROM rust-dev-builder AS api-dev
 EXPOSE 4000
 ENTRYPOINT ["/usr/local/cargo/bin/cargo", "run", "--bin", "api"]
 
-FROM rust-dev-builder as bot-dev
+FROM rust-dev-builder AS bot-dev
 ENTRYPOINT ["/usr/local/cargo/bin/cargo", "run", "--bin", "bot"]
 
-FROM rust-dev-builder as scheduler-dev
+FROM rust-dev-builder AS scheduler-dev
 ENTRYPOINT ["/usr/local/cargo/bin/cargo", "run", "--bin", "scheduler"]
 
 FROM node:14.15.0 AS node-builder
@@ -45,7 +45,7 @@ COPY scraper/babel.config.js .
 RUN yarn
 COPY scraper/src/ src/
 
-FROM node-builder as scraper
+FROM node-builder AS scraper
 ENTRYPOINT yarn start
 
 FROM rust:1.50.0 AS rust-prod-builder
@@ -92,8 +92,6 @@ FROM rust:1.50.0 AS api-prod
 WORKDIR /app
 EXPOSE 4000
 COPY --from=rust-prod /app/target/release/api ./api
-RUN ls /
-RUN ls /app
 ENTRYPOINT ["/app/api"]
 
 FROM rust:1.50.0 AS bot-prod
@@ -105,3 +103,7 @@ FROM rust:1.50.0 AS scheduler-prod
 WORKDIR /app
 COPY --from=rust-prod /app/target/release/scheduler ./scheduler
 ENTRYPOINT ["/app/scheduler"]
+
+FROM redis:6.0.9 AS redis
+COPY ./redis/redis.conf /usr/local/etc/redis/redis.conf
+ENTRYPOINT ["redis-server", "/usr/local/etc/redis/redis.conf"]
