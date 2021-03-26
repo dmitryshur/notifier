@@ -97,4 +97,5 @@ jobs:
             cd ~/notifier
             docker-compose -f docker-compose.prod.yml down --rmi all --remove-orphans
             sed -i 's/{{tag}}/${{ github.event.release.tag_name }}/g' docker-compose.prod.yml
+            sed -i 's/{{bot_token}}/${{ secrets.BOT_TOKEN }}/g' docker-compose.prod.yml
             docker-compose -f docker-compose.prod.yml up -d

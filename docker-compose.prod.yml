@@ -31,7 +31,7 @@ services:
     restart: always
     environment:
       RABBIT_HOST: amqp://rabbitmq:5672
-      BOT_TOKEN: 1567141444:AAGwrhnoqgUCBhyJBrI9Mb-Py_ux50B6UgQ
+      BOT_TOKEN: {{bot_token}}
 
   scheduler:
     image: shurikdima/notifier-scheduler:{{tag}}
